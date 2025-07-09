@@ -98,7 +98,7 @@
 <body>
   <h1>Copiloto Virtual: Tilisarao → Concarán</h1>
   <div style="text-align:center;margin-bottom:16px;color:#555;font-size:18px;font-weight:bold;">
-  
+    En honor a Claki, piloto de Tilisarao y educador vial. Su legado: ¡la seguridad primero!
   </div>
   <div id="map"></div>
   <div id="copiloto-panel">
@@ -220,37 +220,72 @@
       }
     }
 
-    btn.onclick = function() {
-      btn.disabled = true;
-      btn.innerText = 'En viaje...';
-      paso = 0;
-      mostrarIndicacion();
-    };
+    // --- CHECKPOINTS DE RUTA Y AVANCE REAL ---
+    // Checkpoints aproximados entre Tilisarao y Concarán (puedes ajustar las coordenadas para mayor precisión)
+    var checkpoints = [
+      { lat: -32.683, lng: -65.188 }, // Tilisarao
+      { lat: -32.650, lng: -65.210 }, // Salida Tilisarao
+      { lat: -32.620, lng: -65.220 }, // Mitad de ruta
+      { lat: -32.590, lng: -65.235 }, // Curva peligrosa
+      { lat: -32.573, lng: -65.247 }  // Concarán
+    ];
+    var checkpointActual = 0;
+    var viajeEnCurso = false;
+    var esperandoCheckpoint = false;
 
+    // Sobrescribo la función mostrarIndicacion para que solo avance si se detecta movimiento real
     function mostrarIndicacion() {
       if (paso < indicaciones.length) {
         indicacionDiv.innerHTML = indicaciones[paso].texto;
         hablar(indicaciones[paso].texto);
         if (indicaciones[paso].velocidad > 0) {
-          // Si el usuario permite GPS, calcula tiempo real estimado
-          obtenerPosicionUsuario(function(pos) {
-            var distanciaRestante = distanciaTotal;
-            if (pos) {
-              distanciaRestante = calcularDistancia(pos, concaran);
-            }
-            var tiempoEstimado = (distanciaRestante / indicaciones[paso].velocidad) * 3600; // en segundos
-            setTimeout(mostrarIndicacion, Math.max(2000, Math.min(tiempoEstimado * 1000, 12000)));
+          esperandoCheckpoint = true;
+          // Espera a que el usuario llegue al siguiente checkpoint
+          esperarCheckpoint(function() {
             paso++;
+            mostrarIndicacion();
           });
         } else {
           setTimeout(function() {
             btn.innerText = 'Reiniciar';
             btn.disabled = false;
             paso = 0;
+            viajeEnCurso = false;
+            checkpointActual = 0;
           }, 2500);
         }
       }
     }
+
+    // Espera a que el usuario llegue al siguiente checkpoint
+    function esperarCheckpoint(callback) {
+      obtenerPosicionUsuario(function(pos) {
+        if (!pos) {
+          indicacionDiv.innerHTML = '<span style="color:red;">No se pudo obtener tu ubicación. Activa el GPS y otorga permisos.</span>';
+          return;
+        }
+        var siguiente = checkpoints[checkpointActual+1] || checkpoints[checkpoints.length-1];
+        var dist = calcularDistancia(pos, siguiente);
+        if (dist < 0.3) { // Menos de 300 metros al siguiente checkpoint
+          checkpointActual++;
+          esperandoCheckpoint = false;
+          callback();
+        } else {
+          indicacionDiv.innerHTML += '<br><span style="color:#0077cc;font-size:15px;">Avanza por la ruta para continuar. Distancia al próximo punto: ' + dist.toFixed(2) + ' km</span>';
+          setTimeout(function() { esperarCheckpoint(callback); }, 4000);
+        }
+      });
+    }
+
+    btn.onclick = function() {
+      btn.disabled = true;
+      btn.innerText = 'En viaje...';
+      paso = 0;
+      viajeEnCurso = true;
+      checkpointActual = 0;
+      mostrarIndicacion();
+    };
+
     // --- TEST DE CLAKI ---
     var testClaki = [
       { pregunta: '¡Hola! Soy Claki, piloto de Tilisarao. Antes de conducir, ¿has bebido alcohol en las últimas 6 horas?', opciones: ['Sí', 'No'], correcta: 1 },
