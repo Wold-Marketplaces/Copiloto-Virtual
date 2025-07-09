@@ -3,7 +3,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Copiloto Virtual - Tilisarao y Concarán</title>
+  <title>Copiloto Virtual - Ahora podés viajar por todo San Luis</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body { font-family: Arial, sans-serif; }
@@ -96,7 +96,7 @@
   </style>
 </head>
 <body>
-  <h1>Copiloto Virtual: Tilisarao → Concarán</h1>
+  <h1>Copiloto Virtual: ¡Ahora podés viajar por todo San Luis!</h1>
   <div style="text-align:center;margin-bottom:16px;color:#555;font-size:18px;font-weight:bold;">
     En honor a Claki, piloto de Tilisarao y educador vial. Su legado: ¡la seguridad primero!
   </div>
@@ -117,6 +117,29 @@
     </div>
   </div>
   <button id="activarTestClaki" style="padding:10px 22px;font-size:16px;background:#0077cc;color:#fff;border:none;border-radius:8px;cursor:pointer;position:fixed;top:18px;right:18px;z-index:1500;">Test de Claki</button>
+  <div id="seleccion-destino" style="max-width:500px;margin:24px auto 0 auto;text-align:center;">
+    <label for="destinoSelect" style="font-size:17px;font-weight:bold;">Destino en San Luis:</label>
+    <select id="destinoSelect" style="padding:8px 12px;font-size:16px;border-radius:6px;border:1px solid #ccc;width:60%;margin:8px 0;">
+      <option value="">Selecciona un destino...</option>
+      <option value="San Luis">San Luis (Capital)</option>
+      <option value="Villa Mercedes">Villa Mercedes</option>
+      <option value="Merlo">Merlo</option>
+      <option value="La Toma">La Toma</option>
+      <option value="Concarán">Concarán</option>
+      <option value="Tilisarao">Tilisarao</option>
+      <option value="Justo Daract">Justo Daract</option>
+      <option value="Quines">Quines</option>
+      <option value="Naschel">Naschel</option>
+      <option value="Santa Rosa del Conlara">Santa Rosa del Conlara</option>
+      <option value="Luján">Luján</option>
+      <option value="Candelaria">Candelaria</option>
+      <option value="La Punta">La Punta</option>
+      <option value="El Trapiche">El Trapiche</option>
+      <option value="Potrero de los Funes">Potrero de los Funes</option>
+    </select>
+    <button id="buscarDestino" style="padding:8px 18px;font-size:16px;background:#0077cc;color:#fff;border:none;border-radius:8px;cursor:pointer;">Buscar destino</button>
+    <div id="destinoStatus" style="margin-top:8px;color:#0077cc;font-size:15px;"></div>
+  </div>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
@@ -264,6 +287,20 @@
           indicacionDiv.innerHTML = '<span style="color:red;">No se pudo obtener tu ubicación. Activa el GPS y otorga permisos.</span>';
           return;
         }
+        // Avisar si hay curva peligrosa cerca
+        var curvaCercana = curvasPeligrosas.find(function(curva) {
+          return calcularDistancia(pos, curva) < 0.5; // 500 metros
+        });
+        if (curvaCercana && !window.ultimaCurvaAvisada) {
+          indicacionDiv.innerHTML = '<span style="color:#d35400;font-size:18px;font-weight:bold;">¡Atención! Se aproxima una curva peligrosa: ' + curvaCercana.nombre + '. Reduce la velocidad y extrema precaución.</span>';
+          hablar('¡Atención! Se aproxima una curva peligrosa: ' + curvaCercana.nombre + '. Reduce la velocidad y extrema precaución.');
+          window.ultimaCurvaAvisada = curvaCercana.nombre;
+          setTimeout(function() { esperarCheckpoint(callback); }, 5000);
+          return;
+        }
+        if (window.ultimaCurvaAvisada && (!curvaCercana || calcularDistancia(pos, curvaCercana) > 0.5)) {
+          window.ultimaCurvaAvisada = null;
+        }
         var siguiente = checkpoints[checkpointActual+1] || checkpoints[checkpoints.length-1];
         var dist = calcularDistancia(pos, siguiente);
         if (dist < 0.3) { // Menos de 300 metros al siguiente checkpoint
@@ -277,14 +314,91 @@
       });
     }
 
+    // --- NUEVO: Selección de destino por menú desplegable ---
+    var destinoSeleccionado = null;
+    var destinoCoords = null;
+    var destinoSelect = document.getElementById('destinoSelect');
+    var buscarDestinoBtn = document.getElementById('buscarDestino');
+    var destinoStatus = document.getElementById('destinoStatus');
+    var map = null;
+    document.addEventListener('DOMContentLoaded', function() {
+      map = window.map;
+    });
+    // --- Coordenadas fijas para destinos de San Luis ---
+    var destinosSanLuis = {
+      "San Luis": { lat: -33.295, lng: -66.335 },
+      "Villa Mercedes": { lat: -33.675, lng: -65.467 },
+      "Merlo": { lat: -32.344, lng: -65.010 },
+      "La Toma": { lat: -33.070, lng: -65.617 },
+      "Concarán": { lat: -32.573, lng: -65.247 },
+      "Tilisarao": { lat: -32.683, lng: -65.188 },
+      "Justo Daract": { lat: -33.845, lng: -65.184 },
+      "Quines": { lat: -32.217, lng: -65.950 },
+      "Naschel": { lat: -32.920, lng: -65.370 },
+      "Santa Rosa del Conlara": { lat: -32.438, lng: -65.195 },
+      "Luján": { lat: -32.385, lng: -65.617 },
+      "Candelaria": { lat: -32.533, lng: -65.233 },
+      "La Punta": { lat: -33.150, lng: -66.317 },
+      "El Trapiche": { lat: -33.183, lng: -66.050 },
+      "Potrero de los Funes": { lat: -33.230, lng: -66.250 }
+    };
+    buscarDestinoBtn.onclick = function() {
+      var destino = destinoSelect.value;
+      if (!destino) {
+        destinoStatus.innerText = 'Por favor, selecciona un destino válido en San Luis.';
+        return;
+      }
+      if (destinosSanLuis[destino]) {
+        destinoCoords = destinosSanLuis[destino];
+        destinoSeleccionado = destino;
+        destinoStatus.innerText = 'Destino encontrado: ' + destino + '. Listo para iniciar el viaje.';
+        // Marcar destino en el mapa
+        if (map) {
+          if (window.destinoMarker) map.removeLayer(window.destinoMarker);
+          window.destinoMarker = L.marker([destinoCoords.lat, destinoCoords.lng], {icon: L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/684/684908.png',iconSize:[40,40],iconAnchor:[20,20]})}).addTo(map).bindPopup('Destino: ' + destino).openPopup();
+          map.setView([destinoCoords.lat, destinoCoords.lng], 11);
+        }
+      } else {
+        destinoStatus.innerText = 'No se encontró el destino. Intenta con otro nombre.';
+        destinoSeleccionado = null;
+        destinoCoords = null;
+      }
+    };
+    // Modificar el botón de copiloto para usar el destino seleccionado
     btn.onclick = function() {
+      if (!destinoCoords) {
+        destinoStatus.innerText = 'Debes seleccionar un destino válido antes de iniciar el viaje.';
+        return;
+      }
       btn.disabled = true;
       btn.innerText = 'En viaje...';
       paso = 0;
       viajeEnCurso = true;
       checkpointActual = 0;
-      mostrarIndicacion();
+      // Generar checkpoints dinámicos entre la posición actual y el destino
+      obtenerPosicionUsuario(function(pos) {
+        if (pos) {
+          generarCheckpoints(pos, destinoCoords);
+          mostrarIndicacion();
+        } else {
+          destinoStatus.innerText = 'No se pudo obtener tu ubicación actual.';
+          btn.disabled = false;
+          btn.innerText = 'Iniciar Copiloto';
+        }
+      });
     };
+    // Generar checkpoints entre origen y destino
+    function generarCheckpoints(origen, destino) {
+      checkpoints = [origen];
+      // Generar 3 puntos intermedios (puedes mejorar con rutas reales)
+      for (var i = 1; i <= 3; i++) {
+        var lat = origen.lat + (destino.lat - origen.lat) * (i/4);
+        var lng = origen.lng + (destino.lng - origen.lng) * (i/4);
+        checkpoints.push({lat: lat, lng: lng});
+      }
+      checkpoints.push(destino);
+      checkpointActual = 0;
+    }
 
     // --- TEST DE CLAKI ---
     var testClaki = [
