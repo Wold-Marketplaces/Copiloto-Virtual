@@ -1,0 +1,193 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Copiloto Virtual - Tilisarao y Concarán</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; }
+    #map { height: 350px; width: 100%; margin-bottom: 24px; }
+    .copiloto-btn {
+      background-color: #ffa500;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 16px;
+      cursor: pointer;
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 1000;
+    }
+    #copiloto-panel {
+      max-width: 500px;
+      margin: 40px auto;
+      padding: 24px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+      text-align: center;
+    }
+    #copiloto-panel img {
+      width: 80px;
+      margin-bottom: 16px;
+    }
+    #indicacion {
+      margin-top: 24px;
+      font-size: 20px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <h1>Copiloto Virtual: Tilisarao → Concarán</h1>
+  <div style="text-align:center;margin-bottom:16px;color:#555;font-size:18px;font-weight:bold;">
+  
+  </div>
+  <div id="map"></div>
+  <div id="copiloto-panel">
+    <img src="https://cdn-icons-png.flaticon.com/512/684/684908.png" alt="Auto">
+    <h2>¡Bienvenido al Copiloto Virtual!</h2>
+    <p>El copiloto te guiará desde <b>Tilisarao</b> hasta <b>Concarán</b> de forma segura.<br>Presiona el botón para iniciar el viaje y sigue las indicaciones.</p>
+    <button id="iniciarCopiloto" style="padding:12px 28px;font-size:18px;background:#ffa500;color:#fff;border:none;border-radius:8px;cursor:pointer;">Iniciar Copiloto</button>
+    <div id="indicacion"></div>
+  </div>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script>
+    // Coordenadas de Tilisarao y Concarán
+    var tilisarao = { lat: -32.683, lng: -65.188 };
+    var concaran = { lat: -32.573, lng: -65.247 };
+    var distanciaTotal = calcularDistancia(tilisarao, concaran); // en km
+
+    // Inicializar mapa cuando cargue la página
+    document.addEventListener('DOMContentLoaded', function() {
+      var map = L.map('map').setView([tilisarao.lat, tilisarao.lng], 12);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map);
+      // Ruta principal
+      var ruta = [ [tilisarao.lat, tilisarao.lng], [concaran.lat, concaran.lng] ];
+      L.polyline(ruta, {color: 'orange', weight: 6, opacity: 0.7, dashArray: '10,10'}).addTo(map)
+        .bindPopup('Ruta Tilisarao → Concarán');
+      // Marcadores de inicio y fin
+      L.marker([tilisarao.lat, tilisarao.lng]).addTo(map).bindPopup('Tilisarao (Inicio)');
+      L.marker([concaran.lat, concaran.lng]).addTo(map).bindPopup('Concarán (Destino)');
+      // Marcador de usuario
+      var markerUsuario = null;
+      function actualizarPosicionUsuario(pos) {
+        if (!markerUsuario) {
+          markerUsuario = L.marker([pos.lat, pos.lng], {icon: L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/684/684908.png',iconSize:[40,40],iconAnchor:[20,20]})}).addTo(map).bindPopup('Tu ubicación actual');
+        } else {
+          markerUsuario.setLatLng([pos.lat, pos.lng]);
+        }
+        map.setView([pos.lat, pos.lng], 13);
+      }
+      window.actualizarPosicionUsuario = actualizarPosicionUsuario;
+      window.map = map;
+    });
+
+    // Secuencia de indicaciones del copiloto
+    var indicaciones = [
+      { texto: 'Iniciando viaje desde Tilisarao. Usa cinturón de seguridad.', zona: 'urbana', velocidad: 40 },
+      { texto: 'Avanza por Ruta 1. Mantén velocidad máxima de 40 km/h en zona urbana.', zona: 'urbana', velocidad: 40 },
+      { texto: 'Zona rural. Puedes circular a 80 km/h, pero mantén atención. Muchos exceden los 100 km/h, ¡no lo hagas!', zona: 'rural', velocidad: 80 },
+      { texto: 'Curva peligrosa adelante. Reduce a 30 km/h.', zona: 'curva', velocidad: 30 },
+      { texto: 'Cruce con acceso a barrio. Precaución con peatones y vehículos. Mantén 40 km/h.', zona: 'urbana', velocidad: 40 },
+      { texto: 'Llegando a Concarán. Reduce a 30 km/h en zona escolar y hospital.', zona: 'urbana', velocidad: 30 },
+      { texto: '¡Has llegado a Concarán! Fin del recorrido seguro.', zona: 'fin', velocidad: 0 }
+    ];
+    var paso = 0;
+    var btn = document.getElementById('iniciarCopiloto');
+    var indicacionDiv = document.getElementById('indicacion');
+
+    // Función para calcular distancia entre dos puntos (Haversine)
+    function calcularDistancia(a, b) {
+      var R = 6371; // km
+      var dLat = (b.lat - a.lat) * Math.PI / 180;
+      var dLng = (b.lng - a.lng) * Math.PI / 180;
+      var lat1 = a.lat * Math.PI / 180;
+      var lat2 = b.lat * Math.PI / 180;
+      var aVal = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.sin(dLng/2) * Math.sin(dLng/2) * Math.cos(lat1) * Math.cos(lat2);
+      var c = 2 * Math.atan2(Math.sqrt(aVal), Math.sqrt(1-aVal));
+      return R * c;
+    }
+
+    // GPS: obtener posición real del usuario y actualizar cada 5 segundos
+    function obtenerPosicionUsuario(callback) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(pos) {
+          var coords = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+          if (window.actualizarPosicionUsuario) window.actualizarPosicionUsuario(coords);
+          callback(coords);
+        }, function(error) {
+          alert('No se pudo obtener la ubicación. Por favor, activa el GPS y otorga permisos al navegador.');
+          callback(null);
+        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+      } else {
+        alert('Tu navegador no soporta geolocalización.');
+        callback(null);
+      }
+    }
+
+    // Actualización periódica de la ubicación
+    function iniciarSeguimientoGPS() {
+      if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(function(pos) {
+          var coords = {lat: pos.coords.latitude, lng: pos.coords.longitude};
+          if (window.actualizarPosicionUsuario) window.actualizarPosicionUsuario(coords);
+        }, function(error) {
+          // No alertar repetidamente
+        }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+      }
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+      iniciarSeguimientoGPS();
+    });
+
+    function hablar(texto) {
+      if ('speechSynthesis' in window) {
+        var utter = new SpeechSynthesisUtterance(texto);
+        utter.lang = 'es-AR';
+        utter.rate = 1;
+        window.speechSynthesis.speak(utter);
+      }
+    }
+
+    btn.onclick = function() {
+      btn.disabled = true;
+      btn.innerText = 'En viaje...';
+      paso = 0;
+      mostrarIndicacion();
+    };
+
+    function mostrarIndicacion() {
+      if (paso < indicaciones.length) {
+        indicacionDiv.innerHTML = indicaciones[paso].texto;
+        hablar(indicaciones[paso].texto);
+        if (indicaciones[paso].velocidad > 0) {
+          // Si el usuario permite GPS, calcula tiempo real estimado
+          obtenerPosicionUsuario(function(pos) {
+            var distanciaRestante = distanciaTotal;
+            if (pos) {
+              distanciaRestante = calcularDistancia(pos, concaran);
+            }
+            var tiempoEstimado = (distanciaRestante / indicaciones[paso].velocidad) * 3600; // en segundos
+            setTimeout(mostrarIndicacion, Math.max(2000, Math.min(tiempoEstimado * 1000, 12000)));
+            paso++;
+          });
+        } else {
+          setTimeout(function() {
+            btn.innerText = 'Reiniciar';
+            btn.disabled = false;
+            paso = 0;
+          }, 2500);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
