@@ -39,6 +39,60 @@
       font-size: 20px;
       color: #333;
     }
+    /* Estilos para el test de alcoholemia virtual */
+    #claki-test-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.5);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+    }
+    #claki-test-modal > div {
+      background: #fff;
+      padding: 32px 24px;
+      border-radius: 16px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.25);
+      text-align: center;
+      position: relative;
+    }
+    #claki-test-modal img {
+      width: 70px;
+      margin-bottom: 12px;
+    }
+    #claki-test-content {
+      font-size: 18px;
+      margin-bottom: 18px;
+    }
+    .claki-opcion {
+      margin: 8px 6px;
+      padding: 8px 18px;
+      font-size: 16px;
+      background: #ffa500;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    #activarTestClaki {
+      padding: 10px 22px;
+      font-size: 16px;
+      background: #0077cc;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      position: fixed;
+      top: 18px;
+      right: 18px;
+      z-index: 1500;
+    }
   </style>
 </head>
 <body>
@@ -54,6 +108,15 @@
     <button id="iniciarCopiloto" style="padding:12px 28px;font-size:18px;background:#ffa500;color:#fff;border:none;border-radius:8px;cursor:pointer;">Iniciar Copiloto</button>
     <div id="indicacion"></div>
   </div>
+  <div id="claki-test-modal">
+    <div>
+      <img src="https://cdn-icons-png.flaticon.com/512/684/684908.png" alt="Claki">
+      <h2>Test de Claki (Piloto de Tilisarao)</h2>
+      <div id="claki-test-content"></div>
+      <button id="claki-test-close" style="display:none;margin-top:18px;padding:8px 20px;background:#aaa;color:#fff;border:none;border-radius:8px;cursor:pointer;">Cerrar</button>
+    </div>
+  </div>
+  <button id="activarTestClaki" style="padding:10px 22px;font-size:16px;background:#0077cc;color:#fff;border:none;border-radius:8px;cursor:pointer;position:fixed;top:18px;right:18px;z-index:1500;">Test de Claki</button>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script>
@@ -188,6 +251,91 @@
         }
       }
     }
+    // --- TEST DE CLAKI ---
+    var testClaki = [
+      { pregunta: '¡Hola! Soy Claki, piloto de Tilisarao. Antes de conducir, ¿has bebido alcohol en las últimas 6 horas?', opciones: ['Sí', 'No'], correcta: 1 },
+      { pregunta: '¿Te sientes mareado, con sueño o con reflejos lentos?', opciones: ['Sí', 'No'], correcta: 1 },
+      { pregunta: '¿Estás seguro de que puedes conducir de forma segura y responsable?', opciones: ['No', 'Sí'], correcta: 1 },
+      { pregunta: '¿Alguien te recomienda NO manejar hoy?', opciones: ['Sí', 'No'], correcta: 1 }
+    ];
+    var respuestasClaki = [];
+    var pasoClaki = 0;
+    var clakiModal = document.getElementById('claki-test-modal');
+    var clakiContent = document.getElementById('claki-test-content');
+    var clakiBtn = document.getElementById('activarTestClaki');
+    var clakiClose = document.getElementById('claki-test-close');
+    var copilotoBtn = document.getElementById('iniciarCopiloto');
+    var testAprobado = false;
+
+    function hablarClaki(texto) {
+      if ('speechSynthesis' in window) {
+        var utter = new SpeechSynthesisUtterance(texto);
+        utter.lang = 'es-AR';
+        utter.rate = 1;
+        window.speechSynthesis.speak(utter);
+      }
+    }
+
+    function mostrarPreguntaClaki() {
+      if (pasoClaki < testClaki.length) {
+        var q = testClaki[pasoClaki];
+        clakiContent.innerHTML = '<p style="font-size:18px;">' + q.pregunta + '</p>' +
+          q.opciones.map(function(op, i) {
+            return '<button class="claki-opcion" data-idx="' + i + '" style="margin:8px 6px;padding:8px 18px;font-size:16px;background:#ffa500;color:#fff;border:none;border-radius:8px;cursor:pointer;">' + op + '</button>';
+          }).join('');
+        hablarClaki(q.pregunta);
+        Array.from(document.getElementsByClassName('claki-opcion')).forEach(function(btn) {
+          btn.onclick = function() {
+            respuestasClaki.push(parseInt(btn.getAttribute('data-idx')));
+            pasoClaki++;
+            mostrarPreguntaClaki();
+          };
+        });
+      } else {
+        evaluarTestClaki();
+      }
+    }
+
+    function evaluarTestClaki() {
+      var aprobado = true;
+      for (var i = 0; i < testClaki.length; i++) {
+        if (respuestasClaki[i] !== testClaki[i].correcta) {
+          aprobado = false;
+          break;
+        }
+      }
+      if (aprobado) {
+        clakiContent.innerHTML = '<p style="font-size:18px;color:green;font-weight:bold;">¡Aprobado! Puedes conducir. ¡Buen viaje y maneja con responsabilidad!</p>';
+        hablarClaki('¡Aprobado! Puedes conducir. ¡Buen viaje y maneja con responsabilidad!');
+        testAprobado = true;
+        copilotoBtn.disabled = false;
+      } else {
+        clakiContent.innerHTML = '<p style="font-size:18px;color:red;font-weight:bold;">No puedes conducir. Por tu seguridad, no inicies el viaje. Busca a un conductor sobrio o espera.</p>';
+        hablarClaki('No puedes conducir. Por tu seguridad, no inicies el viaje. Busca a un conductor sobrio o espera.');
+        testAprobado = false;
+        copilotoBtn.disabled = true;
+      }
+      clakiClose.style.display = 'block';
+    }
+
+    clakiBtn.onclick = function() {
+      clakiModal.style.display = 'flex';
+      clakiClose.style.display = 'none';
+      clakiContent.innerHTML = '<p style="font-size:18px;">¡Hola! Soy Claki, piloto de Tilisarao. Antes de salir, necesito hacerte unas preguntas para tu seguridad.</p>';
+      hablarClaki('¡Hola! Soy Claki, piloto de Tilisarao. Antes de salir, necesito hacerte unas preguntas para tu seguridad.');
+      setTimeout(function() {
+        respuestasClaki = [];
+        pasoClaki = 0;
+        mostrarPreguntaClaki();
+      }, 2000);
+    };
+    clakiClose.onclick = function() {
+      clakiModal.style.display = 'none';
+    };
+    // Al cargar, el copiloto está deshabilitado hasta aprobar el test
+    document.addEventListener('DOMContentLoaded', function() {
+      copilotoBtn.disabled = true;
+    });
   </script>
 </body>
 </html>
