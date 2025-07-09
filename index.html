@@ -101,6 +101,7 @@
     En honor a Claki, piloto de Tilisarao y educador vial. Su legado: ¡la seguridad primero!
   </div>
   <div id="map"></div>
+  <div id="ubicacionUsuario" style="text-align:center;margin-bottom:18px;color:#0077cc;font-size:16px;font-weight:bold;">Ubicación actual: <span id="coordenadasUsuario">Obteniendo...</span></div>
   <div id="copiloto-panel">
     <img src="https://cdn-icons-png.flaticon.com/512/684/684908.png" alt="Auto">
     <h2>¡Bienvenido al Copiloto Virtual!</h2>
@@ -484,6 +485,24 @@
     // Al cargar, el copiloto está deshabilitado hasta aprobar el test
     document.addEventListener('DOMContentLoaded', function() {
       copilotoBtn.disabled = true;
+    });
+
+    // Mostrar coordenadas en pantalla
+    function mostrarCoordenadasUsuario(pos) {
+      var coordDiv = document.getElementById('coordenadasUsuario');
+      if (coordDiv && pos) {
+        coordDiv.textContent = pos.lat.toFixed(5) + ", " + pos.lng.toFixed(5);
+      } else if (coordDiv) {
+        coordDiv.textContent = "No disponible";
+      }
+    }
+    // Modificar actualizarPosicionUsuario para mostrar coordenadas
+    document.addEventListener('DOMContentLoaded', function() {
+      var originalActualizar = window.actualizarPosicionUsuario;
+      window.actualizarPosicionUsuario = function(pos) {
+        originalActualizar(pos);
+        mostrarCoordenadasUsuario(pos);
+      };
     });
   </script>
 </body>
